@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 // import {useNavigation} from '@react-navigation/native';
 import {
   Text,
@@ -9,11 +9,61 @@ import {
   ImageBackground,
 } from 'react-native';
 import {images} from '../../assets/images/image';
+import {createClient} from '@supabase/supabase-js';
+import 'react-native-url-polyfill/auto';
 
 const InputData = ({navigation}: {navigation: any}) => {
   // const navigation = useNavigation();
   const [temperature, setTemperature] = useState('');
   const [displayText, setDisplayText] = useState('');
+  const [temperatureToOpenFan, setTemperatureToOpenFan] = useState('');
+
+  const supabaseUrl = 'https://atamzgfzgyynoqqdnbup.supabase.co';
+  const supabaseKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0YW16Z2Z6Z3l5bm9xcWRuYnVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTkyOTg0NDEsImV4cCI6MjAzNDg3NDQ0MX0.Ner2Wvuop0mILVgNkhI_Q0_XNgzC32pKRTkAhQlWA2I';
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      detectSessionInUrl: false,
+    },
+  });
+
+  const fetchData = async () => {
+    const {data, error} = await supabase
+      .schema('public')
+      .from('ocd')
+      .select('*')
+      .order('id', {ascending: false})
+      .limit(1);
+
+    if (error) {
+      console.error(error);
+    } else {
+      console.log('Data', data);
+      setTemperatureToOpenFan(data[0].value);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    const channels = supabase
+      .channel('custom-all-channel1')
+      .on(
+        'postgres_changes',
+        {event: '*', schema: 'public', table: 'temperature'},
+        payload => {
+          console.log('Change received!', payload);
+          fetchData();
+        },
+      )
+      .subscribe();
+    return () => {
+      channels.unsubscribe();
+    };
+    // return channels.unsubscribe();
+  }, []);
 
   const handleTemperatureInput = (text: React.SetStateAction<string>) => {
     setTemperature(text);
@@ -32,6 +82,10 @@ const InputData = ({navigation}: {navigation: any}) => {
         resizeMode="stretch"
         style={styles.imageBackground}>
         <View style={styles.header}>
+          <Text style={styles.headerText}>
+            Ngưỡng tự động bật : {temperatureToOpenFan}
+          </Text>
+
           <Text style={styles.headerText}>Cường độ ánh</Text>
           <Text style={styles.headerText}>sáng hiện tại là: </Text>
         </View>
@@ -65,7 +119,12 @@ const InputData = ({navigation}: {navigation: any}) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.button1}
-          onPress={() => navigation.navigate('ShowLight')}>
+          onPress={() => {
+            navigation.navigate('ShowLight', {
+              temperatureToOpenFan: temperatureToOpenFan,
+              currentTem: temperature,
+            });
+          }}>
           <Text style={styles.buttonText1}>Thiết bị</Text>
         </TouchableOpacity>
       </View>

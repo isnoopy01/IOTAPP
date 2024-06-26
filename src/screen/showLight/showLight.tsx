@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Switch,
@@ -9,11 +9,19 @@ import {
 } from 'react-native';
 import {images} from '../../assets/images/image';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {useRoute} from '@react-navigation/native';
 
 const ShowLight = ({navigation}: {navigation: any}) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const toggleSwitch = () => setIsEnabled(previousState => !previousState);
+  const route = useRoute();
+  const params = route.params as any;
 
+  useEffect(() => {
+    if (Number(params?.currentTem) >= Number(params?.temperatureToOpenFan)) {
+      setIsEnabled(true);
+    }
+  }, [params]);
   return (
     <SafeAreaView
       style={{
