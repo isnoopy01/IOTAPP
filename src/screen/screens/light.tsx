@@ -11,13 +11,28 @@ import {
 import {images} from '../../assets/images/image';
 import {createClient} from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
+import Geolocation from 'react-native-geolocation-service';
+import moment from 'moment';
+import {Weather} from './weather';
+import axios from 'axios';
+import {PERMISSIONS, request} from 'react-native-permissions';
 
 const InputData = ({navigation}: {navigation: any}) => {
   // const navigation = useNavigation();
   const [temperature, setTemperature] = useState('');
   const [displayText, setDisplayText] = useState('');
   const [temperatureToOpenFan, setTemperatureToOpenFan] = useState('');
-
+  const [position, setPosition] = useState<Geolocation.GeoPosition>();
+  const [weather, setWeather] = useState<
+    Array<{
+      time: string;
+      temperature: number;
+    }>
+  >();
+  const [currentWeather, setCurrentWeather] = useState<{
+    time: string;
+    temperature: number;
+  }>();
   const supabaseUrl = 'https://atamzgfzgyynoqqdnbup.supabase.co';
   const supabaseKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0YW16Z2Z6Z3l5bm9xcWRuYnVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTkyOTg0NDEsImV4cCI6MjAzNDg3NDQ0MX0.Ner2Wvuop0mILVgNkhI_Q0_XNgzC32pKRTkAhQlWA2I';
@@ -75,6 +90,98 @@ const InputData = ({navigation}: {navigation: any}) => {
   //   navigation.navigate('ShowLight' as never);
   // };
 
+  useEffect(() => {
+    getLocation();
+  }, []);
+  useEffect(() => {
+    handleCalculateCurrentTemperature();
+  }, [weather]);
+
+  const getWeather = async (lat: number, long: number) => {
+    const params = {
+      latitude: lat,
+      longitude: long,
+      hourly: 'temperature_2m',
+      forecast_days: 1,
+    };
+    const url = 'https://api.open-meteo.com/v1/forecast';
+    try {
+      const responses = await axios.get(url, {
+        params,
+      });
+      const res = responses.data as Weather;
+      const data: Array<{
+        time: string;
+        temperature: number;
+      }> = [];
+      res.hourly.time.forEach((item, index) => {
+        data.push({
+          time: moment(item).format('HH:mm'),
+          temperature: res.hourly.temperature_2m[index],
+        });
+      });
+      return data;
+    } catch (error) {
+      console.table('err', error);
+    }
+  };
+
+  const handleCalculateCurrentTemperature = async () => {
+    let currentHours = moment().hours();
+    let currentMinutes = moment().minutes();
+    const hours =
+      currentMinutes > 30 ? `${currentHours + 1}:00` : `${currentHours}:00`;
+    const currentTemp = weather?.find(item => item.time === hours);
+    if (!!currentTemp) {
+      setDisplayText(currentTemp?.temperature.toString() + '°C');
+      setCurrentWeather(currentTemp as any);
+    }
+  };
+
+  const getLocation = async () => {
+    request(PERMISSIONS.IOS.LOCATION_ALWAYS).then(result => {
+      console.log('result', result);
+    });
+    Geolocation.getCurrentPosition(
+      async position => {
+        console.log(position);
+        setPosition(position);
+        const weather = await getWeather(
+          position.coords.latitude,
+          position.coords.longitude,
+        );
+        console.log('weather', weather);
+        setWeather(weather);
+      },
+      error => {
+        console.log(error.code, error.message);
+      },
+      {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
+    );
+  };
+
+  const handleGotoChart = () => {
+    const chartData: Array<any> = [];
+    weather?.forEach((item, index) => {
+      if (
+        index === 0 ||
+        index === 4 ||
+        index === 8 ||
+        index === 12 ||
+        index === 16 ||
+        index === 20 ||
+        index === 23
+      ) {
+        chartData.push(item);
+      }
+    });
+    navigation.navigate('Chart', {
+      currentWeather: currentWeather,
+      weather: weather,
+      chartData: chartData,
+    });
+  };
+
   return (
     <View style={styles.container}>
       <ImageBackground
@@ -82,6 +189,11 @@ const InputData = ({navigation}: {navigation: any}) => {
         resizeMode="stretch"
         style={styles.imageBackground}>
         <View style={styles.header}>
+          <Text style={styles.textdisplay}>Current position :</Text>
+          <Text style={styles.textdisplay}>
+            Latitude : {position?.coords.latitude}, Longitude :{' '}
+            {position?.coords.longitude}
+          </Text>
           <Text style={styles.headerText}>
             Ngưỡng tự động bật : {temperatureToOpenFan}
           </Text>
@@ -107,13 +219,13 @@ const InputData = ({navigation}: {navigation: any}) => {
       </View>
       <Image style={styles.color} source={images.Daimau} /> */}
       <View style={styles.inputContainer}>
-        <TextInput
+        {/* <TextInput
           style={styles.input}
           placeholder="Nhập cường độ ánh sáng"
           value={temperature}
           onChangeText={handleTemperatureInput}
           keyboardType="numeric"
-        />
+        /> */}
         <TouchableOpacity style={styles.button} onPress={handleSubmit}>
           <Text style={styles.buttonText}>Xác nhận</Text>
         </TouchableOpacity>
@@ -126,6 +238,9 @@ const InputData = ({navigation}: {navigation: any}) => {
             });
           }}>
           <Text style={styles.buttonText1}>Thiết bị</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={handleGotoChart}>
+          <Text style={styles.buttonText}>Chart</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -185,7 +300,7 @@ const styles = StyleSheet.create({
     // marginBottom: 50,
   },
   headerText: {
-    fontSize: 25,
+    fontSize: 22,
     color: '#333',
     fontWeight: 'bold',
   },
